@@ -10,9 +10,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+        font-family: 'Inter', sans-serif;
         }
         .serif-font {
             font-family: 'Lora', Georgia, serif;
@@ -33,17 +34,6 @@
             font-weight: bold;
             text-align: center;
         }
-        /* Kelas Khusus Transkrip Arial 12 Sesuai Instruksi */
-        .transkrip-box {
-            font-family: Arial, Helvetica, sans-serif !important;
-            font-size: 12pt !important;
-            line-height: 1 !important;
-            width: 100%;
-            max-width: 180mm; /* 210mm A4 - 30mm margin kiri kanan */
-            margin: 0 auto !important;
-            box-sizing: border-box;
-            background: white;
-        }
         .transkrip-kop-kab {
             font-family: Arial, Helvetica, sans-serif !important;
             font-size: 12pt !important;
@@ -62,6 +52,11 @@
             font-style: italic !important;
             line-height: 1.3 !important;
         }
+        .print-transkrip-A4 {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
         .transkrip-table {
             font-family: Arial, Helvetica, sans-serif !important;
             font-size: 12pt !important;
@@ -70,41 +65,53 @@
         }
         .transkrip-table th, .transkrip-table td {
             border: 1px solid #000000 !important;
-            padding: 5px 8px !important;
-            line-height: 1.3 !important;
+            padding: 6px 6px !important;
+            line-height: 1.5 !important;
         }
-        /* Mengatur cetakan paksa Landscape & Potrait */
+
+        /* Aturan Cetak Tunggal Bersih - Tanpa Tabrakan Saling Mengunci */
         @media print {
-            body {
-                background-color: white !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            header, aside, footer, .print\\:hidden, .no-print {
-                display: none !important;
-            }
-            main {
-                padding: 0 !important;
-                margin: 0 !important;
-                width: 100% !important;
-            }
-            .print-landscape-section {
-                width: 100% !important;
-                transform: scale(0.95);
-                transform-origin: top left;
-            }
+            /* 1. Atur margin kertas fisik A4 ke 2cm (Mengganti 0mm bawaan lama Anda) */
             @page {
                 size: A4 portrait;
-                margin: 1.5cm !important;
+                margin: 1cm 2cm 1cm 2cm !important;
             }
-            .print-transkrip-A4 {
-                border: none !important;
-                padding: 0 !important;
-                margin: 0 auto !important;
+
+            /* 2. Sembunyikan elemen aplikasi */
+            header, aside, footer, .print\:hidden, .no-print, button {
+                display: none !important;
+            }
+
+            /* 3. Paksa body dan main melebar 100% mengikuti batas area cetak */
+            body, html, main, #root {
                 width: 100% !important;
                 max-width: 100% !important;
-                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background-color: white !important;
             }
+
+            /* 4. MENYELARASKAN KOP, DATA SISWA & TABEL BIRU (Wajib 100%) */
+            .print-transkrip-A4, 
+            .transkrip-box, 
+            table, 
+            .transkrip-table {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 100% !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                box-shadow: none !important;
+                border-collapse: collapse !important;
+            }
+
+            /* Menghilangkan margin bawaan eksternal jika ada */
+            .ml-6 {
+                margin-left: 0 !important;
+            }
+
             .page-break {
                 page-break-after: always;
             }
@@ -154,6 +161,11 @@
     // =========================================================
     const bulatkanDuaDesimal = (val) => {
       return Math.round((val + Number.EPSILON) * 100) / 100;
+    };
+
+    // FUNGSI HELPER BARU: Pembulatan ke 1 desimal terdekat untuk Hasil Akhir dan Rata-rata
+    const bulatkanSatuDesimal = (val) => {
+      return Math.round((val + Number.EPSILON) * 10) / 10;
     };
 
     const getSubPenilaianLabel = (subKey) => {
@@ -317,7 +329,7 @@
       // Aliases aman untuk mencegah ReferenceError akibat perbedaan gaya panggil pada kode lawas
       const dapatkanKehadiranSiswaLocal = dapatkanKehadiranSiswa;
 
-      // --- LOGIKA HITUNG FORMULA (DEKLARASI DI ATAS AGAR BEBAS DARI TDZ) ---
+      // --- LOGIKA HITUNG FORMULA (DIUBAH UNTUK MENUNJANG ATURAN PEMBULATAN BARU) ---
       const hitungRataRataRaporMapel = (siswaId, mapelId) => {
         const dataNilai = nilai[siswaId]?.[mapelId];
         if (!dataNilai) return 0;
@@ -335,17 +347,20 @@
         return praktekVal > 0 ? bulatkanDuaDesimal((0.7 * tulisVal) + (0.3 * praktekVal)) : bulatkanDuaDesimal(tulisVal);
       };
 
+      // PENYEMPURNAAN ATURAN BARU: Membulatkan hasil kalkulasi akhir ke 1 desimal terdekat
       const hitungNilaiAkhirIjazah = (siswaId, mapelId) => {
         const rapor = hitungRataRataRaporMapel(siswaId, mapelId);
         const asaj = hitungNilAIASAJMapel(siswaId, mapelId);
         const attend = dapatkanKehadiranSiswa(siswaId);
-        return bulatkanDuaDesimal((0.4 * rapor) + (0.4 * asaj) + (0.2 * attend));
+        const rawScore = (0.4 * rapor) + (0.4 * asaj) + (0.2 * attend);
+        return bulatkanSatuDesimal(rawScore);
       };
 
+      // PENYEMPURNAAN ATURAN BARU: Membulatkan rata-rata transkrip ijazah ke 1 desimal terdekat
       const hitungRataRataIjazahSiswa = (siswaId) => {
         let total = 0;
         mapel.forEach(m => { total += hitungNilaiAkhirIjazah(siswaId, m.id); });
-        return mapel.length > 0 ? bulatkanDuaDesimal(total / mapel.length) : 0;
+        return mapel.length > 0 ? bulatkanSatuDesimal(total / mapel.length) : 0;
       };
 
       const cekKelulusanSiswa = (siswaId) => {
@@ -399,65 +414,8 @@
         return Math.round((filled / siswa.length) * 100);
       };
 
-      // ==============================================================================================
-      // CONSOLIDATED CALCULATION BLOCK (FIXED TDZ / HOISTING REFERENCEERROR FOR totalSiswa & GLOBAL VARIABLES)
-      // ==============================================================================================
-      const totalSiswa = siswa.length;
-      const totalMapel = mapel.length;
-      const rataRataSekolah = parseFloat((siswa.reduce((acc, curr) => acc + hitungRataRataIjazahSiswa(curr.id), 0) / (totalSiswa || 1)).toFixed(2));
-      const lulusSiswaCount = siswa.filter(s => cekKelulusanSiswa(s.id)).length;
-      const persentaseKelulusan = totalSiswa > 0 ? ((lulusSiswaCount / totalSiswa) * 100).toFixed(1) : 0;
-
-      // Hitung total progres global (11 komponen)
-      const progresGlobal = Math.round(
-        (hitungProgresProfil() + hitungProgresSK() + (sekolah.logoKabupaten ? 100 : 0) + hitungProgresSiswa() + hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('k6s2') + hitungProgresNilaiKomponen('asaj') + hitungProgresKehadiran() + hitungProgresNomorIjazah()) / 11
-      );
-
-      // --- PERHITUNGAN RANKING DINAMIS ---
-      // 1. Peringkat Rata-Rata Rapor (Semester 1 s.d. 4 / Kelas 5 & 6)
-      const siswaDenganRaporRata = siswa.map(s => {
-        const sum = mapel.reduce((acc, m) => acc + hitungRataRataRaporMapel(s.id, m.id), 0);
-        const avg = mapel.length > 0 ? bulatkanDuaDesimal(sum / mapel.length) : 0;
-        return { id: s.id, avg };
-      });
-      const sortedRapor = [...siswaDenganRaporRata].sort((a, b) => b.avg - a.avg);
-      const raporRanks = {};
-      let currentRaporRank = 1;
-      sortedRapor.forEach((item, idx) => {
-        if (idx > 0 && item.avg < sortedRapor[idx - 1].avg) {
-          currentRaporRank = idx + 1;
-        }
-        raporRanks[item.id] = currentRaporRank;
-      });
-
-      // 2. Peringkat Nilai Akhir Ijazah
-      const siswaDenganIjazahRata = siswa.map(s => {
-        return { id: s.id, avg: hitungRataRataIjazahSiswa(s.id) };
-      });
-      const sortedIjazah = [...siswaDenganIjazahRata].sort((a, b) => b.avg - a.avg);
-      const ijazahRanks = {};
-      let currentIjazahRank = 1;
-      sortedIjazah.forEach((item, idx) => {
-        if (idx > 0 && item.avg < sortedIjazah[idx - 1].avg) {
-          currentIjazahRank = idx + 1;
-        }
-        ijazahRanks[item.id] = currentIjazahRank;
-      });
-
-      // --- FIX BUG: FUNGSI UNTUK MEMBUKA EDIT SISWA (DISELESAIKAN HOISTING-NYA DI SINI) ---
-      const openEditSiswa = (s) => {
-        setEditingSiswa(s);
-        setSiswaForm({ 
-          nama: s.nama, nis: s.nis, nisn: s.nisn, jk: s.jk || 'L', tempatLahir: s.tempatLahir || '', tanggalLahir: s.tanggalLahir || '', namaAyah: s.namaAyah || '', namaIbu: s.namaIbu || '', alamat: s.alamat || '', rombel: s.rombel || 'Kelas VI', foto: s.foto || '' 
-        });
-        setShowSiswaModal(true);
-      };
-
-      const openEditSiswaLocal = (s) => {
-        openEditSiswa(s);
-      };
-
-      // --- JAMINAN DEFINISI FUNGSI UNDUH TEMPLATE EXCEL DI SEKTOR DALAM APP COMPONENT ---
+      // --- NATIVE EXCEL (.xlsx) HANDLERS ---
+      // FIXING REFERENCEERROR: Definisikan handleDownloadTemplateSiswaExcel secara eksplisit di awal App()
       const handleDownloadTemplateSiswaExcel = () => {
         if (typeof window.XLSX === 'undefined') {
           showToast('Engine Excel sedang memuat, mohon tunggu.', 'error');
@@ -474,134 +432,6 @@
         showToast('Template Excel Biodata Siswa berhasil diunduh!');
       };
 
-      // --- FIX BUG: JAMINAN DEFINISI FUNGSI UNTUK MENUTUP MODAL SISWA ---
-      const closeSiswaModal = () => {
-        setShowSiswaModal(false);
-        setEditingSiswa(null);
-        setSiswaForm({ 
-          nama: '', nis: '', nisn: '', jk: 'L', tempatLahir: '', tanggalLahir: '', namaAyah: '', namaIbu: '', alamat: '', rombel: 'Kelas VI', foto: '' 
-        });
-      };
-
-      // --- AUTO OFFLINE STORAGE (TRY-CATCH SAFE FOR STORAGE QUOTA LIMITS) ---
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_sekolah_ref', JSON.stringify(sekolah)); } catch(e) { console.warn(e); }
-      }, [sekolah]);
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_siswa_ref', JSON.stringify(siswa)); } catch(e) { console.warn(e); }
-      }, [siswa]);
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_mapel_ref', JSON.stringify(mapel)); } catch(e) { console.warn(e); }
-      }, [mapel]);
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_nilai_ref', JSON.stringify(nilai)); } catch(e) { warn(e); }
-      }, [nilai]);
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_kehadiran_ref', JSON.stringify(kehadiran)); } catch(e) { console.warn(e); }
-      }, [kehadiran]);
-      useEffect(() => { 
-        try { localStorage.setItem('ijazah_nomor_ref', JSON.stringify(nomorIjazah)); } catch(e) { console.warn(e); }
-      }, [nomorIjazah]);
-
-      useEffect(() => {
-        if (mapel.length > 0 && !mapel.find(m => m.id === selectedMapelId)) {
-          setSelectedMapelId(mapel[0].id);
-        }
-      }, [mapel]);
-
-      // Set default selected SKL Siswa jika siswa ada
-      useEffect(() => {
-        if (siswa.length > 0 && !selectedSklSiswaId) {
-          setSelectedSklSiswaId(siswa[0].id);
-        }
-      }, [siswa]);
-
-      // --- LOGIKA UNGGAH LOGO DENGAN RESET VALUE INPUT BERKAS & PREVENT EVENT POOLING ---
-      const handleLogoUpload = (e, field) => {
-        const inputElement = e.target;
-        const file = inputElement.files[0];
-        if (!file) return;
-
-        if (file.size > 2 * 1024 * 1024) {
-          showToast('Ukuran berkas logo maksimal 2MB!', 'error');
-          inputElement.value = '';
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setSekolah(prev => ({
-            ...prev,
-            [field]: event.target.result
-          }));
-          showToast('Logo berhasil diunggah!');
-          inputElement.value = ''; // Reset nilai berkas input agar dapat dipicu kembali
-        };
-        reader.readAsDataURL(file);
-      };
-
-      const handleRemoveLogo = (field) => {
-        setSekolah(prev => ({
-          ...prev,
-          [field]: ''
-        }));
-        showToast('Logo berhasil dihapus!', 'warning');
-      };
-
-      // FIX BUG: Mendefinisikan handleLogoUploadLocal dan handleRemoveLogoLocal di dalam scope komponen App
-      const handleLogoUploadLocal = (e, field) => handleLogoUpload(e, field);
-      const handleRemoveLogoLocal = (field) => handleRemoveLogo(field);
-
-      // --- FIX BUG: UNGGAH FOTO MASSAL BERBASIS NISN ---
-      const handleMassFotoUpload = (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
-
-        const readerPromises = files.map(file => {
-          return new Promise((resolve) => {
-            const filename = file.name;
-            const lastDot = filename.lastIndexOf('.');
-            const nisnMatch = lastDot !== -1 ? filename.substring(0, lastDot).trim() : filename.trim();
-
-            const targetSiswa = siswa.find(s => s.nisn === nisnMatch);
-            if (targetSiswa) {
-              const reader = new FileReader();
-              reader.onload = (event) => {
-                resolve({ id: targetSiswa.id, foto: event.target.result });
-              };
-              reader.readAsDataURL(file);
-            } else {
-              resolve(null);
-            }
-          });
-        });
-
-        Promise.all(readerPromises).then(results => {
-          const validResults = []
-          for (let i = 0; i < results.length; i++) {
-            if (results[i] !== null) {
-              validResults.push(results[i]);
-            }
-          }
-          if (validResults.length > 0) {
-            setSiswa(prevSiswa => {
-              const updated = prevSiswa.map(s => {
-                const match = validResults.find(r => r.id === s.id);
-                return match ? { ...s, foto: match.foto } : s;
-              });
-              return updated;
-            });
-            showToast(`Berhasil mengunggah & mencocokkan ${validResults.length} foto siswa secara massal!`);
-          } else {
-            showToast('Tidak ada foto yang cocok dengan NISN siswa yang terdaftar.', 'error');
-          }
-          e.target.value = ''; // Reset input file
-        });
-      };
-
-      const handleMassFotoUploadLocal = (e) => handleMassFotoUpload(e);
-
-      // --- NATIVE EXCEL (.xlsx) IMPOR SISWA ---
       const handleImportSiswaExcel = (e) => {
         if (typeof window.XLSX === 'undefined') {
           showToast('Engine Excel belum siap, mohon coba kembali.', 'error');
@@ -668,78 +498,87 @@
         reader.readAsArrayBuffer(file);
       };
 
-      // --- SAVE SISWA ---
-      const handleSaveSiswa = (e) => {
-        e.preventDefault();
-        if (!siswaForm.nama || !siswaForm.nis || !siswaForm.nisn) { showToast('Mohon lengkapi data siswa!', 'error'); return; }
-        if (editingSiswa) {
-          setSiswa(siswa.map(s => s.id === editingSiswa.id ? { ...s, ...siswaForm } : s));
-          showToast('Data siswa diperbarui!');
-        } else {
-          const newSiswa = { id: Date.now().toString(), ...siswaForm };
-          setSiswa([...siswa, newSiswa]);
-          setNilai(prev => {
-            const updated = { ...prev };
-            updated[newSiswa.id] = {};
-            mapel.forEach(m => { updated[newSiswa.id][m.id] = { k5s1: 0, k5s2: 0, k6s1: 0, k6s2: 0, asaj: 0, praktek: 0 }; });
-            return updated;
+      // --- COOP DENGAN FOTO SISWA: FITUR MASSAL & INDIVIDUAL FOTO ---
+      const handleMassFotoUpload = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        const readerPromises = files.map(file => {
+          return new Promise((resolve) => {
+            const filename = file.name;
+            const lastDot = filename.lastIndexOf('.');
+            const nisnMatch = lastDot !== -1 ? filename.substring(0, lastDot).trim() : filename.trim();
+
+            const targetSiswa = siswa.find(s => s.nisn === nisnMatch);
+            if (targetSiswa) {
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                resolve({ id: targetSiswa.id, foto: event.target.result });
+              };
+              reader.readAsDataURL(file);
+            } else {
+              resolve(null);
+            }
           });
-          setKehadiran(prev => ({ ...prev, [newSiswa.id]: 100 }));
-          setNomorIjazah(prev => ({ ...prev, [newSiswa.id]: '' }));
-          showToast('Siswa berhasil ditambahkan!');
-        }
-        closeSiswaModal();
-      };
-
-      // --- DELETE SISWA ---
-      const handleDeleteSiswa = (id) => {
-        setSiswa(siswa.filter(s => s.id !== id));
-        setNilai(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
-        setKehadiran(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
-        setNomorIjazah(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
-        showToast('Siswa berhasil dihapus!', 'warning');
-      };
-
-      // --- HANDLER DOWNLOAD REKAP EXCEL ---
-      // (Definisi fungsi murni sudah diekspos di scope App di atas)
-
-      // --- MATA PELAJARAN CRUD ---
-      const handleSaveMapel = (e) => {
-        e.preventDefault();
-        if (!mapelForm.kode || !mapelForm.nama) { showToast('Mohon isi kode dan nama mapel!', 'error'); return; }
-        if (editingMapel) {
-          setMapel(mapel.map(m => m.id === editingMapel.id ? { ...m, ...mapelForm } : m));
-          showToast('Mata pelajaran diperbarui!');
-        } else {
-          const newMapel = { id: 'M' + Date.now().toString().slice(-4), ...mapelForm };
-          setMapel([...mapel, newMapel]);
-          setNilai(prev => {
-            const updated = { ...prev };
-            Object.keys(updated).forEach(siswaId => { updated[siswaId][newMapel.id] = { k5s1: 0, k5s2: 0, k6s1: 0, k6s2: 0, asaj: 0, praktek: 0 }; });
-            return updated;
-          });
-          showToast('Mata pelajaran berhasil ditambahkan!');
-        }
-        closeMapelModal();
-      };
-
-      const closeMapelModal = () => { setShowMapelModal(false); setEditingMapel(null); setMapelForm({ kode: '', nama: '' }); };
-      const openEditMapel = (m) => { setEditingMapel(m); setMapelForm({ kode: m.kode, nama: m.nama }); setShowMapelModal(true); };
-
-      // --- DELETE MAPEL ---
-      const handleDeleteMapel = (id) => {
-        setMapel(mapel.filter(m => m.id !== id));
-        setNilai(prev => {
-          const updated = { ...prev };
-          Object.keys(updated).forEach(siswaId => {
-            delete updated[siswaId][id];
-          });
-          return updated;
         });
-        showToast('Mata pelajaran berhasil dihapus!', 'warning');
+
+        Promise.all(readerPromises).then(results => {
+          const validResults = [];
+          for (let i = 0; i < results.length; i++) {
+            if (results[i] !== null) {
+              validResults.push(results[i]);
+            }
+          }
+          if (validResults.length > 0) {
+            setSiswa(prevSiswa => {
+              const updated = prevSiswa.map(s => {
+                const match = validResults.find(r => r.id === s.id);
+                return match ? { ...s, foto: match.foto } : s;
+              });
+              return updated;
+            });
+            showToast(`Berhasil mengunggah & mencocokkan ${validResults.length} foto siswa secara massal!`);
+          } else {
+            showToast('Tidak ada foto yang cocok dengan NISN siswa yang terdaftar.', 'error');
+          }
+          e.target.value = ''; // Reset input file
+        });
       };
 
-      // --- PENILAIAN EXCEL ---
+      const handleMassFotoUploadLocal = (e) => handleMassFotoUpload(e);
+
+      const handleLogoUpload = (e, field) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+          showToast('Ukuran berkas logo maksimal 2MB!', 'error');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setSekolah(prev => ({
+            ...prev,
+            [field]: event.target.result
+          }));
+          showToast('Logo berhasil diunggah!');
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const handleRemoveLogo = (field) => {
+        setSekolah(prev => ({
+          ...prev,
+          [field]: ''
+        }));
+        showToast('Logo berhasil dihapus!', 'warning');
+      };
+
+      const handleLogoUploadLocal = (e, field) => handleLogoUpload(e, field);
+      const handleRemoveLogoLocal = (field) => handleRemoveLogo(field);
+
+      // --- LOGIKA PENYELARASAN FUNGSIONAL PENILAIAN EXCEL ---
       const handleExportNilaiExcel = () => {
         if (typeof window.XLSX === 'undefined') { showToast('Engine Excel sedang memproses, mohon tunggu.', 'error'); return; }
         const activeMapel = mapel.find(m => m.id === selectedMapelId);
@@ -816,13 +655,217 @@
         reader.readAsArrayBuffer(file);
       };
 
-      // Helper Renderer Transkrip tunggal untuk mencegah redudansi and duplikasi markup
+      // --- JAMINAN DEFINISI FUNGSI BACKUP (exportData & importData) ---
+      const exportData = () => {
+        const backupData = { sekolah, siswa, mapel, nilai, kehadiran, nomorIjazah, exportedAt: new Date().toISOString() };
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `backup_nilai_ijazah_${sekolah.nama.toLowerCase().replace(/\s+/g, '_')}_2026.json`;
+        link.click();
+        showToast('Cadangan data berhasil diunduh!');
+      };
+
+      const importData = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            if (parsed.sekolah && parsed.siswa && parsed.mapel && parsed.nilai) {
+              setSekolah(parsed.sekolah);
+              setSiswa(parsed.siswa);
+              setMapel(parsed.mapel);
+              setNilai(parsed.nilai);
+              if (parsed.kehadiran) setKehadiran(parsed.kehadiran);
+              if (parsed.nomorIjazah) setNomorIjazah(parsed.nomorIjazah);
+              showToast('Data berhasil dipulihkan dari cadangan!', 'success');
+            } else {
+              showToast('File JSON tidak valid / format salah!', 'error');
+            }
+          } catch (err) {
+            showToast('Gagal membaca file JSON!', 'error');
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      const handleKehadiranChange = (siswaId, val) => {
+        setKehadiran(prev => ({ ...prev, [siswaId]: Math.min(100, Math.max(0, parseFloat(val) || 0)) }));
+      };
+
+      const handlePenilaianValueChange = (siswaId, mapelId, subField, val) => {
+        const cleanValue = Math.min(100, Math.max(0, parseFloat(val) || 0));
+        setNilai(prev => ({
+          ...prev,
+          [siswaId]: {
+            ...prev[siswaId],
+            [mapelId]: { ...prev[siswaId]?.[mapelId], [subField]: cleanValue }
+          }
+        }));
+      };
+
+      // --- MATA PELAJARAN CRUD ---
+      const handleSaveMapel = (e) => {
+        e.preventDefault();
+        if (!mapelForm.kode || !mapelForm.nama) { showToast('Mohon isi kode dan nama mapel!', 'error'); return; }
+        if (editingMapel) {
+          setMapel(mapel.map(m => m.id === editingMapel.id ? { ...m, ...mapelForm } : m));
+          showToast('Mata pelajaran diperbarui!');
+        } else {
+          const newMapel = { id: 'M' + Date.now().toString().slice(-4), ...mapelForm };
+          setMapel([...mapel, newMapel]);
+          setNilai(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(siswaId => { updated[siswaId][newMapel.id] = { k5s1: 0, k5s2: 0, k6s1: 0, k6s2: 0, asaj: 0, praktek: 0 }; });
+            return updated;
+          });
+          showToast('Mata pelajaran berhasil ditambahkan!');
+        }
+        closeMapelModal();
+      };
+
+      const closeMapelModal = () => { setShowMapelModal(false); setEditingMapel(null); setMapelForm({ kode: '', nama: '' }); };
+      const openEditMapel = (m) => { setEditingMapel(m); setMapelForm({ kode: m.kode, nama: m.nama }); setShowMapelModal(true); };
+
+      const handleDeleteMapel = (id) => {
+        setMapel(mapel.filter(m => m.id !== id));
+        setNilai(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(siswaId => {
+            delete updated[siswaId][id];
+          });
+          return updated;
+        });
+        showToast('Mata pelajaran berhasil dihapus!', 'warning');
+      };
+
+      // --- JAMINAN DEFINISI FUNGSI UNTUK MENUTUP MODAL SISWA ---
+      const closeSiswaModal = () => {
+        setShowSiswaModal(false);
+        setEditingSiswa(null);
+        setSiswaForm({ 
+          nama: '', nis: '', nisn: '', jk: 'L', tempatLahir: '', tanggalLahir: '', namaAyah: '', namaIbu: '', alamat: '', rombel: 'Kelas VI', foto: '' 
+        });
+      };
+
+      // --- SAVE SISWA ---
+      const handleSaveSiswa = (e) => {
+        e.preventDefault();
+        if (!siswaForm.nama || !siswaForm.nis || !siswaForm.nisn) { showToast('Mohon lengkapi data siswa!', 'error'); return; }
+        if (editingSiswa) {
+          setSiswa(siswa.map(s => s.id === editingSiswa.id ? { ...s, ...siswaForm } : s));
+          showToast('Data siswa diperbarui!');
+        } else {
+          const newSiswa = { id: Date.now().toString(), ...siswaForm };
+          setSiswa([...siswa, newSiswa]);
+          setNilai(prev => {
+            const updated = { ...prev };
+            updated[newSiswa.id] = {};
+            mapel.forEach(m => { updated[newSiswa.id][m.id] = { k5s1: 0, k5s2: 0, k6s1: 0, k6s2: 0, asaj: 0, praktek: 0 }; });
+            return updated;
+          });
+          setKehadiran(prev => ({ ...prev, [newSiswa.id]: 100 }));
+          setNomorIjazah(prev => ({ ...prev, [newSiswa.id]: '' }));
+          showToast('Siswa berhasil ditambahkan!');
+        }
+        closeSiswaModal();
+      };
+
+      // --- DELETE SISWA ---
+      const handleDeleteSiswa = (id) => {
+        setSiswa(siswa.filter(s => s.id !== id));
+        setNilai(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
+        setKehadiran(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
+        setNomorIjazah(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
+        showToast('Siswa berhasil dihapus!', 'warning');
+      };
+
+      const openEditSiswa = (s) => {
+        setEditingSiswa(s);
+        setSiswaForm({ 
+          nama: s.nama, nis: s.nis, nisn: s.nisn, jk: s.jk || 'L', tempatLahir: s.tempatLahir || '', tanggalLahir: s.tanggalLahir || '', namaAyah: s.namaAyah || '', namaIbu: s.namaIbu || '', alamat: s.alamat || '', rombel: s.rombel || 'Kelas VI', foto: s.foto || '' 
+        });
+        setShowSiswaModal(true);
+      };
+
+      const openEditSiswaLocal = (s) => {
+        openEditSiswa(s);
+      };
+
+      const executeResetAllData = () => {
+        localStorage.clear();
+        setSekolah({
+          tahunPelajaran: '2025/2026', nama: 'SDN 1 TANJUNGKARYA', npsn: '20220456', kepalaSekolah: 'Agus Saepudin, S.Pd.', nip: '196705011988031005', waliKelas: 'Siti Aminah, S.Pd.', nipWaliKelas: '198503242011012004', alamat: 'Jl. Raya Tanjungkarya No. 45', kecamatan: 'Mandalawangi', kabupaten: 'BANDUNG', noRapat: '421.2/089-SD/2026', tglRapat: '2026-06-12', noKelulusan: '421.2/090/SD-2026', tglKelulusan: '2026-06-15', noSKK: '421.2/091-SKK/2026', tglSKK: '2026-06-15', titimangsaTranskrip: 'Garut, 16 Juni 2026', kriteriaKelulusan: 75, logoKabupaten: '', logoSekolah: ''
+        });
+        setSiswa(DEFAULT_SISWA);
+        setMapel(DEFAULT_MAPEL);
+        setNilai(generateInitialGrades(DEFAULT_SISWA, DEFAULT_MAPEL));
+        setKehadiran(generateInitialKehadiran(DEFAULT_SISWA));
+        setNomorIjazah({
+          '1': 'DN-01/D-SD/K13/2600001',
+          '2': 'DN-01/D-SD/K13/2600002',
+          '3': 'DN-01/D-SD/K13/2600003',
+          '4': 'DN-01/D-SD/K13/2600004',
+          '5': 'DN-01/D-SD/K13/2600005',
+          '6': 'DN-01/D-SD/K13/2600006'
+        });
+        setShowResetConfirm(false);
+        showToast('Semua data berhasil di-reset!', 'warning');
+      };
+
+      // --- FILTRASI RANKING DI DEKLARASIKAN DI SINI ---
+      const totalSiswa = siswa.length;
+      const totalMapel = mapel.length;
+      const rataRataSekolah = parseFloat((siswa.reduce((acc, curr) => acc + hitungRataRataIjazahSiswa(curr.id), 0) / (totalSiswa || 1)).toFixed(2));
+      const lulusSiswaCount = siswa.filter(s => cekKelulusanSiswa(s.id)).length;
+      const persentaseKelulusan = totalSiswa > 0 ? ((lulusSiswaCount / totalSiswa) * 100).toFixed(1) : 0;
+
+      // Hitung total progres global (11 komponen)
+      const progresGlobal = Math.round(
+        (hitungProgresProfil() + hitungProgresSK() + (sekolah.logoKabupaten ? 100 : 0) + hitungProgresSiswa() + hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('k6s2') + hitungProgresNilaiKomponen('asaj') + hitungProgresKehadiran() + hitungProgresNomorIjazah()) / 11
+      );
+
+      // --- PERHITUNGAN RANKING DINAMIS ---
+      // 1. Peringkat Rata-Rata Rapor (Semester 1 s.d. 4 / Kelas 5 & 6)
+      const siswaDenganRaporRata = siswa.map(s => {
+        const sum = mapel.reduce((acc, m) => acc + hitungRataRataRaporMapel(s.id, m.id), 0);
+        const avg = mapel.length > 0 ? bulatkanDuaDesimal(sum / mapel.length) : 0;
+        return { id: s.id, avg };
+      });
+      const sortedRapor = [...siswaDenganRaporRata].sort((a, b) => b.avg - a.avg);
+      const raporRanks = {};
+      let currentRaporRank = 1;
+      sortedRapor.forEach((item, idx) => {
+        if (idx > 0 && item.avg < sortedRapor[idx - 1].avg) {
+          currentRaporRank = idx + 1;
+        }
+        raporRanks[item.id] = currentRaporRank;
+      });
+
+      // 2. Peringkat Nilai Akhir Ijazah
+      const siswaDenganIjazahRata = siswa.map(s => {
+        return { id: s.id, avg: hitungRataRataIjazahSiswa(s.id) };
+      });
+      const sortedIjazah = [...siswaDenganIjazahRata].sort((a, b) => b.avg - a.avg);
+      const ijazahRanks = {};
+      let currentIjazahRank = 1;
+      sortedIjazah.forEach((item, idx) => {
+        if (idx > 0 && item.avg < sortedIjazah[idx - 1].avg) {
+          currentIjazahRank = idx + 1;
+        }
+        ijazahRanks[item.id] = currentIjazahRank;
+      });
+
+      // --- RENDER DOKUMEN TRANSKRIP (OPTIMASI SINGLE PAGE) ---
       const renderTranskripSiswa = (s) => {
         const rRata = hitungRataRataIjazahSiswa(s.id);
         return (
-          <div key={s.id} className="bg-white border rounded-lg transkrip-box shadow-md print:shadow-none print:border-0 print:p-0 print:transkrip-A4 page-break" style={{ padding: '1.5cm', pageBreakAfter: 'always' }}>
+          <div key={s.id} className="bg-white border rounded-lg transkrip-box shadow-md print:shadow-none print:border-0 p-8 sm:p-12 md:p-14 print:p-0 page-break animate-fadeIn" style={{ pageBreakAfter: 'always' }}>
             {/* KOP SURAT */}
-            <div className="flex items-center justify-between border-b-4 border-double border-black pb-4 mb-4">
+            <div className="flex items-center justify-between border-b-4 border-double border-black pb-3 mb-3">
               <div className="w-16 h-16 flex items-center justify-center shrink-0">
                 {sekolah.logoKabupaten ? <img src={sekolah.logoKabupaten} alt="Logo" className="max-w-full h-full object-contain" /> : <span className="text-3xl">🏛️</span>}
               </div>
@@ -836,43 +879,43 @@
             </div>
 
             {/* Judul & Nomor */}
-            <div className="text-center space-y-1 mb-6">
+            <div className="text-center space-y-1 mb-5">
               <h3 className="font-bold tracking-wider uppercase my-0" style={{ fontSize: '12pt' }}>TRANSKRIP NILAI</h3>
               <p className="font-semibold my-0" style={{ fontSize: '11pt' }}>Nomor : {sekolah.noKelulusan || '...........................................'}</p>
             </div>
 
             {/* BIODATA SISWA (Disederhanakan, Rapat, Profesional) */}
-            <div className="mt-4" style={{ fontSize: '12pt' }}>
+            <div className="mt-3" style={{ fontSize: '11pt' }}>
               <table className="w-full text-left table-fixed">
                 <tbody>
                   <tr>
-                    <td className="w-[280px] py-1">Nama Satuan Pendidikan</td>
-                    <td className="w-4 py-1">:</td>
-                    <td className="font-bold py-1 uppercase">{sekolah.nama}</td>
+                    <td style={{ width: '260px', padding: '1px 0' }}>Nama Satuan Pendidikan</td>
+                    <td style={{ width: '15px', padding: '1px 0' }}>:</td>
+                    <td className="font-bold uppercase" style={{ padding: '1px 0' }}>{sekolah.nama}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">Nama Peserta Didik</td>
-                    <td>:</td>
-                    <td className="font-bold py-1 uppercase">{s.nama}</td>
+                    <td style={{ padding: '1px 0' }}>Nama Peserta Didik</td>
+                    <td style={{ padding: '1px 0' }}>:</td>
+                    <td className="font-bold uppercase" style={{ padding: '1px 0' }}>{s.nama}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">Tempat dan Tanggal Lahir</td>
-                    <td>:</td>
-                    <td className="py-1">{s.tempatLahir}, {formatTanggalIndo(s.tanggalLahir)}</td>
+                    <td style={{ padding: '1px 0' }}>Tempat dan Tanggal Lahir</td>
+                    <td style={{ padding: '1px 0' }}>:</td>
+                    <td style={{ padding: '1px 0' }}>{s.tempatLahir}, {formatTanggalIndo(s.tanggalLahir)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">Nomor Induk Siswa Nasional</td>
-                    <td>:</td>
+                    <td style={{ padding: '1px 0' }}>Nomor Induk Siswa Nasional</td>
+                    <td style={{ padding: '1px 0' }}>:</td>
                     <td className="font-mono font-semibold" style={{ padding: '1px 0' }}>{s.nisn}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">Nomor Ijazah</td>
-                    <td>:</td>
+                    <td style={{ padding: '1px 0' }}>Nomor Ijazah</td>
+                    <td style={{ padding: '1px 0' }}>:</td>
                     <td className="font-mono font-bold" style={{ padding: '1px 0' }}>{nomorIjazah[s.id] || '.........................................'}</td>
                   </tr>
                   <tr>
-                    <td className="py-1">Tanggal Kelulusan</td>
-                    <td>:</td>
+                    <td style={{ padding: '1px 0' }}>Tanggal Kelulusan</td>
+                    <td style={{ padding: '1px 0' }}>:</td>
                     <td className="font-semibold" style={{ padding: '1px 0' }}>{formatTanggalIndo(sekolah.tglKelulusan)}</td>
                   </tr>
                 </tbody>
@@ -880,13 +923,13 @@
             </div>
 
             {/* TABEL NILAI RATA TENGAH (MURNI NO, MAPEL, NILAI) */}
-            <div className="mt-6 flex justify-center">
+            <div className="mt-5 flex justify-center">
               <table className="transkrip-table border border-black text-center">
                 <thead>
                   <tr className="border-b border-black bg-gray-50 text-center font-bold">
                     <th className="border-r border-black p-2.5 w-16">No.</th>
                     <th className="border-r border-black p-2 text-left">Mata Pelajaran</th>
-                    <th className="p-2.5 w-32">Nilai</th>
+                    <th className="p-2 w-32">Nilai</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -894,26 +937,26 @@
                     const finalScore = hitungNilaiAkhirIjazah(s.id, m.id);
                     return (
                       <tr key={m.id} className="border-b border-black text-center">
-                        <td className="border-r border-black p-2 font-mono">{index + 1}.</td>
-                        <td className="border-r border-black p-2 text-left font-medium">{m.nama}</td>
-                        <td className="p-2 font-bold">{finalScore.toFixed(2).replace('.', ',')}</td>
+                        <td className="border-r border-black p-1.5 font-mono">{index + 1}.</td>
+                        <td className="border-r border-black p-1.5 text-left font-medium">{m.nama}</td>
+                        <td className="p-1.5 font-bold">{finalScore.toFixed(2).replace('.', ',')}</td>
                       </tr>
                     );
                   })}
                   <tr className="border-t border-black font-bold bg-gray-100">
-                    <td className="border-r border-black p-2.5 text-center" colSpan="2">RATA-RATA</td>
-                    <td className="p-2.5 font-black text-red-800 text-center">{rRata.toFixed(2).replace('.', ',')}</td>
+                    <td className="border-r border-black p-2 text-center" colSpan="2">RATA-RATA</td>
+                    <td className="p-2 font-black text-red-800 text-center">{rRata.toFixed(2).replace('.', ',')}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* BLOK TANDA TANGAN KEPALA SEKOLAH */}
-            <div className="mt-8 flex justify-end" style={{ fontSize: '12pt' }}>
-              <div className="w-[300px] text-left space-y-1">
+            {/* BLOK TANDA TANGAN KEPALA SEKOLAH - Rapat and Presisi agar tidak melorot ke halaman 2 */}
+            <div className="mt-6 flex justify-end" style={{ fontSize: '11.5pt' }}>
+              <div className="w-[300px] text-left space-y-0.5">
                 <p className="my-0">{sekolah.kabupaten ? sekolah.kabupaten.toUpperCase() : '................'}, {formatTanggalIndo(sekolah.tglKelulusan)}</p>
                 <p className="font-bold my-0">Kepala Sekolah,</p>
-                <div className="h-20"></div> {/* Blank spacer Area Cap & TTD */}
+                <div className="h-16"></div> {/* Spacer Cap & TTD rapat */}
                 <p className="font-bold underline uppercase my-0">{sekolah.kepalaSekolah}</p>
                 <p className="text-gray-600 font-mono text-xs my-0">NIP. {sekolah.nip}</p>
               </div>
@@ -922,12 +965,12 @@
         );
       };
 
-      // Helper Renderer SKL tunggal untuk mencegah duplikasi and redudansi kode cetak massal/individu
+      // --- HELPER RENDER SKL ---
       const renderSklSiswa = (s) => {
         const rerataAkhir = hitungRataRataIjazahSiswa(s.id);
         const isLulus = rerataAkhir >= sekolah.kriteriaKelulusan;
         return (
-          <div key={s.id} className="bg-white border p-12 max-w-[210mm] mx-auto shadow-md serif-font text-xs page-break" style={{ pageBreakAfter: 'always' }}>
+          <div key={s.id} className="bg-white border p-12 max-w-[210mm] mx-auto shadow-none serif-font text-xs page-break" style={{ pageBreakAfter: 'always' }}>
             {/* KOP Dinas Pendidikan */}
             <div className="flex items-center justify-between border-b-4 border-double border-black pb-4 mb-6">
               <div className="w-20 h-20 flex items-center justify-center shrink-0">
@@ -940,7 +983,7 @@
                 <p className="text-[10px] font-medium italic my-0">{sekolah.alamat || '................'}, Kec. {sekolah.kecamatan || '................'}, Kab. {sekolah.kabupaten || '................'}</p>
               </div>
               <div className="w-20 h-20 flex items-center justify-center shrink-0">
-                {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full max-h-full object-contain" /> : <span className="text-4xl"></span>}
+                {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full h-full object-contain" /> : <span className="text-4xl"></span>}
               </div>
             </div>
 
@@ -957,8 +1000,8 @@
               <tbody>
                 <tr><td className="w-40 py-1">Nama Lengkap</td><td className="w-4">:</td><td className="font-bold py-1 uppercase">{s.nama}</td></tr>
                 <tr><td className="py-1">Tempat, Tanggal Lahir</td><td>:</td><td className="py-1">{s.tempatLahir}, {s.tanggalLahir ? new Date(s.tanggalLahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</td></tr>
-                <tr><td className="py-1">Nomor Induk Siswa (NIS)</td><td>:</td><td className="py-1 font-mono">{s.nis}</td></tr>
-                <tr><td className="py-1">Nomor Induk Siswa Nasional (NISN)</td><td>:</td><td className="py-1 font-mono">{s.nisn}</td></tr>
+                <tr><td className="py-1">Nomor Induk Siswa (NIS)</td><td>:</td><td className="font-mono py-1">{s.nis}</td></tr>
+                <tr><td className="py-1">Nomor Induk Siswa Nasional (NISN)</td><td>:</td><td className="font-mono py-1">{s.nisn}</td></tr>
                 <tr><td className="py-1">Nama Orang Tua / Wali</td><td>:</td><td className="py-1 uppercase">{s.namaAyah} / {s.namaIbu}</td></tr>
               </tbody>
             </table>
@@ -991,12 +1034,103 @@
                 <p className="font-bold">Kepala {sekolah.nama},</p>
                 <div className="h-16"></div> {/* Area TTD */}
                 <p className="font-bold underline uppercase">{sekolah.kepalaSekolah}</p>
-                <p className="text-gray-600 font-mono text-xs font-semibold">NIP. {sekolah.nip}</p>
+                <p className="text-gray-600 font-mono text-xs font-semibold flex items-center justify-start gap-1">NIP. {sekolah.nip}</p>
               </div>
             </div>
           </div>
         );
       };
+
+      // --- FUNGSIONALITAS DOWNLOAD PDF LEWAT PRINT SYSTEM ---
+      const handleDownloadPDF = (docName) => {
+        showToast(`Mempersiapkan PDF untuk "${docName}"... Silakan pilih 'Simpan sebagai PDF' (Save as PDF) pada jendela printer.`);
+        setTimeout(() => {
+          window.print();
+        }, 1000);
+      };
+
+      // --- DOWNLOAD REKAP EXCEL DATA ENGINE ---
+      const handleDownloadRekapExcel = (type) => {
+        if (typeof window.XLSX === 'undefined') {
+          showToast('Engine Excel sedang memuat, mohon tunggu.', 'error');
+          return;
+        }
+
+        let matrix = [];
+        let sheetName = "";
+        let filename = "";
+
+        if (type === 'rata_rapor') {
+          sheetName = "Rata-Rata Rapor";
+          filename = "rekap_rata_rata_rapor.xlsx";
+          // Header
+          const headerRow = ["No", "NIS", "NISN", "Nama Siswa"];
+          mapel.forEach(m => headerRow.push(m.kode));
+          headerRow.push("Jumlah", "Rata-Rata", "Kehadiran", "Rank");
+          matrix.push(headerRow);
+          
+          siswa.forEach((s, idx) => {
+            const row = [idx + 1, s.nis, s.nisn, s.nama];
+            let sum = 0;
+            mapel.forEach(m => {
+              const score = hitungRataRataRaporMapel(s.id, m.id);
+              row.push(score);
+              sum += score;
+            });
+            const average = mapel.length > 0 ? bulatkanDuaDesimal(sum / mapel.length) : 0;
+            row.push(sum, average, dapatkanKehadiranSiswa(s.id), raporRanks[s.id]);
+            matrix.push(row);
+          });
+        } else if (type === 'transkrip') {
+          sheetName = "Nilai Transkrip";
+          filename = "rekap_transkrip_ijazah.xlsx";
+          const headerRow = ["No", "NIS", "NISN", "Nama Siswa", "Nomor Ijazah"];
+          mapel.forEach(m => headerRow.push(m.kode));
+          headerRow.push("Rata-Rata Akhir", "Rank", "Keterangan");
+          matrix.push(headerRow);
+
+          siswa.forEach((s, idx) => {
+            const row = [idx + 1, s.nis, s.nisn, s.nama, nomorIjazah[s.id] || ''];
+            mapel.forEach(m => {
+              row.push(hitungNilAIASAJMapel(s.id, m.id));
+            });
+            row.push(hitungRataRataIjazahSiswa(s.id), ijazahRanks[s.id], cekKelulusanSiswa(s.id) ? "LULUS" : "TIDAK LULUS");
+            matrix.push(row);
+          });
+        } else if (type === 'leger') {
+          sheetName = "Leger Nilai";
+          filename = "leger_nilai_lengkap.xlsx";
+          const r1 = ["No", "NIS", "NISN", "Nama Siswa", "Kehadiran"];
+          const r2 = ["", "", "", "", ""];
+          mapel.forEach(m => {
+            r1.push(m.nama, "", "", "");
+            r2.push("Rapor", "ASAJ(T)", "ASAJ(P)", "Nilai Akhir");
+          });
+          r1.push("Rata-Rata", "Rank");
+          r2.push("", "");
+          matrix.push(r1, r2);
+
+          siswa.forEach((s, idx) => {
+            const row = [idx + 1, s.nis, s.nisn, s.nama, kehadiran[s.id] || 0];
+            mapel.forEach(m => {
+              const itemNilai = nilai[s.id]?.[m.id] || { k5s1: 0, k5s2: 0, k6s1: 0, k6s2: 0, asaj: 0, praktek: 0 };
+              const rAverage = hitungRataRataRaporMapel(s.id, m.id);
+              const finalScore = hitungNilaiAkhirIjazah(s.id, m.id);
+              row.push(rAverage, itemNilai.asaj, itemNilai.praktek, finalScore);
+            });
+            row.push(hitungRataRataIjazahSiswa(s.id), ijazahRanks[s.id]);
+            matrix.push(row);
+          });
+        }
+
+        const ws = window.XLSX.utils.aoa_to_sheet(matrix);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        window.XLSX.writeFile(wb, filename);
+        showToast(`Berhasil mengekspor rekap ${sheetName} ke Excel!`);
+      };
+
+      const handleDownloadRekapExcelLocal = (type) => handleDownloadRekapExcel(type);
 
       return (
         <div className="min-h-screen bg-gray-100 flex flex-col font-sans text-gray-800 antialiased">
@@ -1073,7 +1207,7 @@
                   {/* Mata Pelajaran */}
                   <button 
                     onClick={() => { setActiveTab('mapel'); setSelectedPrintSiswa(null); }} 
-                    className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mapel' ? 'bg-red-800 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-red-800'}`}
+                    className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-semibold transition-all ${activeTab === 'mapel' ? 'bg-red-800 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
                   >
                     <svg className="w-5 h-5 mr-3 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
@@ -1130,7 +1264,7 @@
                         <span>Rekap Nilai</span>
                       </div>
                       <svg className={`w-4 h-4 transform transition-transform duration-200 ${isRekapDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
                     {isRekapDropdownOpen && (
@@ -1159,7 +1293,7 @@
                   <div className="space-y-1">
                     <button 
                       onClick={() => setIsAdministrasiDropdownOpen(!isAdministrasiDropdownOpen)} 
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold transition-all ${activeTab === 'administrasi' ? 'bg-red-100 text-red-900 font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-red-800'}`}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold transition-all ${activeTab === 'administrasi' ? 'bg-red-100 text-red-900 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                       <div className="flex items-center">
                         <svg className="w-5 h-5 mr-3 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1207,49 +1341,284 @@
               {/* DASHBOARD */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6 print:hidden animate-fadeIn">
-                  <div className="bg-gradient-to-r from-red-800 to-red-950 text-white p-6 rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-center">
-                    <div>
-                      <h2 className="text-xl font-bold">Selamat Datang di Portal Pengolahan Nilai</h2>
-                      <p className="text-xs text-red-200 mt-1">Status Progres Sistem Pengisian Nilai Ijazah SD</p>
+                  
+                  {/* Banner Utama */}
+                  <div className="bg-gradient-to-r from-red-800 via-red-900 to-red-950 text-white p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row justify-between items-center relative overflow-hidden">
+                    <div className="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
+                      <svg className="w-64 h-64 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                      </svg>
                     </div>
-                    <div className="bg-red-700/50 px-4 py-2.5 rounded-xl text-center"><p className="text-[10px] text-red-200 uppercase font-mono">Ketuntasan Global</p><p className="text-lg font-black text-yellow-300">{progresGlobal}%</p></div>
+                    <div className="space-y-2 z-10 text-center sm:text-left">
+                      <span className="bg-yellow-400/20 text-yellow-300 text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wider">Aktivitas Luring Terjamin</span>
+                      <h2 className="text-xl sm:text-2xl font-black tracking-tight">{sekolah.nama || 'PORTAL SEKOLAH'}</h2>
+                      <p className="text-xs text-red-200">Sistem Evaluasi Nilai Akhir & Administrasi Kelulusan Peserta Didik Kelas VI</p>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md px-6 py-4 rounded-xl border border-white/20 text-center shrink-0 mt-4 sm:mt-0 z-10">
+                      <p className="text-[10px] text-red-100 uppercase tracking-widest font-mono">Indeks Ketuntasan</p>
+                      <p className="text-3xl font-black text-yellow-300 tracking-tight">{progresGlobal}%</p>
+                    </div>
                   </div>
 
-                  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
-                    <h3 className="font-bold text-gray-800 text-lg">Monitor Progres Pengisian Data</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm font-bold"><span>Total Progres Kelengkapan</span><span className="text-red-800">{progresGlobal}%</span></div>
-                      <div className="w-full bg-gray-200 h-4 rounded-full overflow-hidden"><div className="bg-gradient-to-r from-red-600 to-red-800 h-full transition-all" style={{ width: `${progresGlobal}%` }}></div></div>
+                  {/* KARTU STATISTIK INTERAKTIF BARU */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                    
+                    {/* Metrik 1: Jumlah Siswa (Dapat Diklik ke Tab Siswa) */}
+                    <div 
+                      onClick={() => setActiveTab('siswa')}
+                      className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border border-gray-150 shadow-sm flex items-center justify-between group hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Siswa VI Terdaftar</p>
+                        <p className="text-3xl font-black text-gray-900">{totalSiswa} <span className="text-xs font-normal text-gray-500">Siswa</span></p>
+                        <p className="text-[10px] text-blue-600 font-bold flex items-center gap-1">
+                          <span>♂ {siswa.filter(s => s.jk === 'L' || s.jk === 'l').length} L</span> • <span>♀ {siswa.filter(s => s.jk === 'P' || s.jk === 'p').length} P</span>
+                        </p>
+                      </div>
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
                     </div>
+
+                    {/* Metrik 2: KKM Minimal */}
+                    <div 
+                      onClick={() => setActiveTab('mapel')}
+                      className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border border-gray-150 shadow-sm flex items-center justify-between group hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Batas KKM Global</p>
+                        <p className="text-3xl font-black text-red-800">{sekolah.kriteriaKelulusan} <span className="text-xs font-normal text-gray-500">Poin</span></p>
+                        <p className="text-[10px] text-red-600 font-bold flex items-center gap-0.5">
+                          <span>Standar Minimal Kelulusan</span>
+                        </p>
+                      </div>
+                      <div className="p-3 bg-red-50 text-red-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Metrik 3: Persentase Kelulusan (Dapat Diklik ke Tab Kelulusan) */}
+                    <div 
+                      onClick={() => setActiveTab('kelulusan')}
+                      className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border border-gray-150 shadow-sm flex items-center justify-between group hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Persentase Kelulusan</p>
+                        <p className="text-3xl font-black text-emerald-600">{persentaseKelulusan}%</p>
+                        <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
+                          <span>{lulusSiswaCount} dari {totalSiswa} siswa tuntas</span>
+                        </p>
+                      </div>
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Metrik 4: Nilai Rata-rata Sekolah (Dapat Diklik ke Rekap Transkrip) */}
+                    <div 
+                      onClick={() => { setActiveTab('rekap'); setActiveRekapSub('transkrip'); }}
+                      className="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border border-gray-150 shadow-sm flex items-center justify-between group hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Rata-Rata Sekolah</p>
+                        <p className="text-3xl font-black text-amber-600">{rataRataSekolah}</p>
+                        <p className="text-[10px] text-amber-600 font-bold flex items-center gap-0.5">
+                          <span>{totalMapel} Mata Pelajaran Aktif</span>
+                        </p>
+                      </div>
+                      <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform">
+                        <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" />
+                        </svg>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* PANEL WIDGET SEBARAN GENDER & RINGKASAN KELULUSAN */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    {/* Widget 1: Sebaran Gender Visual Bar */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4 text-left">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Demografi Peserta Didik</h4>
+                        <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold">Kelas VI</span>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-semibold text-blue-600 flex items-center gap-1">
+                            <span>♂</span> Laki-laki
+                          </span>
+                          <span className="font-bold">{siswa.filter(s => s.jk === 'L' || s.jk === 'l').length} Siswa ({totalSiswa > 0 ? Math.round((siswa.filter(s => s.jk === 'L' || s.jk === 'l').length / totalSiswa) * 100) : 0}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                          <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${totalSiswa > 0 ? (siswa.filter(s => s.jk === 'L' || s.jk === 'l').length / totalSiswa) * 100 : 0}%` }}></div>
+                        </div>
+
+                        <div className="flex justify-between text-sm pt-1">
+                          <span className="font-semibold text-pink-500 flex items-center gap-1">
+                            <span>♀</span> Perempuan
+                          </span>
+                          <span className="font-bold">{siswa.filter(s => s.jk === 'P' || s.jk === 'p').length} Siswa ({totalSiswa > 0 ? Math.round((siswa.filter(s => s.jk === 'P' || s.jk === 'p').length / totalSiswa) * 100) : 0}%)</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden">
+                          <div className="bg-pink-400 h-full transition-all duration-500" style={{ width: `${totalSiswa > 0 ? (siswa.filter(s => s.jk === 'P' || s.jk === 'p').length / totalSiswa) * 100 : 0}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Widget 2: Status Kelulusan Berdasarkan KKM Global */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-4 text-left">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Analisis Kelulusan (KKM: {sekolah.kriteriaKelulusan})</h4>
+                      <div className="grid grid-cols-2 gap-4 h-[95px] items-center">
+                        <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center hover:scale-[1.02] transition-transform">
+                          <p className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">TUNTAS KKM</p>
+                          <p className="text-2xl font-black text-emerald-600 mt-1">{lulusSiswaCount}</p>
+                        </div>
+                        <div className="p-3 bg-red-50 rounded-xl border border-red-100 text-center hover:scale-[1.02] transition-transform">
+                          <p className="text-[9px] font-bold text-red-700 uppercase tracking-wide">BELUM TUNTAS</p>
+                          <p className="text-2xl font-black text-red-600 mt-1">{totalSiswa - lulusSiswaCount}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Widget 3: Pintasan Interaktif (Quick Shortcuts) */}
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3.5 text-left">
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pintasan Aksi Cepat</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <button 
+                          onClick={() => { setEditingSiswa(null); setShowSiswaModal(true); }}
+                          className="p-2.5 bg-gray-50 border rounded-xl hover:bg-red-50 hover:text-red-900 font-semibold transition-all text-center flex items-center justify-center gap-1.5"
+                        >
+                          <span>👤</span> + Siswa
+                        </button>
+                        <button 
+                          onClick={() => { setActiveTab('penilaian'); setIsPenilaianDropdownOpen(true); }}
+                          className="p-2.5 bg-gray-50 border rounded-xl hover:bg-red-50 hover:text-red-900 font-semibold transition-all text-center flex items-center justify-center gap-1.5"
+                        >
+                          <span>📝</span> Entri Nilai
+                        </button>
+                        <button 
+                          onClick={() => { setActiveTab('administrasi'); setActiveAdministrasiSub('skl'); setIsAdministrasiDropdownOpen(true); }}
+                          className="p-2.5 bg-gray-50 border rounded-xl hover:bg-red-50 hover:text-red-900 font-semibold transition-all text-center flex items-center justify-center gap-1.5"
+                        >
+                          <span>📄</span> Cetak SKL
+                        </button>
+                        <button 
+                          onClick={exportData}
+                          className="p-2.5 bg-gray-50 border rounded-xl hover:bg-red-50 hover:text-red-900 font-semibold transition-all text-center flex items-center justify-center gap-1.5"
+                        >
+                          <span>💾</span> Backup JSON
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* MONITOR PROGRES PENGISIAN DATA (Interaktif, klik langsung pindah tab) */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6 text-left">
+                    <div className="flex justify-between items-center border-b pb-3">
+                      <div>
+                        <h3 className="font-bold text-gray-800 text-lg">Progres Kesiapan Dokumen</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Klik salah satu komponen di bawah ini untuk langsung melompat ke halaman pengaturannya.</p>
+                      </div>
+                      <div className="bg-red-50 text-red-800 text-xs px-3 py-1 rounded-full font-bold border border-red-100">
+                        Total Kesiapan: {progresGlobal}%
+                      </div>
+                    </div>
+                    
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Profil Sekolah</span><span className="text-red-800">{hitungProgresProfil()}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${hitungProgresProfil()}%` }}></div></div>
+                      
+                      {/* Progres 1: Profil Sekolah */}
+                      <div 
+                        onClick={() => { setActiveTab('profil'); setSubTabRef('sekolah'); }}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">🏛️ Profil Satuan Pendidikan</span>
+                          <span className="text-red-800 font-mono">{hitungProgresProfil()}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${hitungProgresProfil()}%` }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Surat Keterangan</span><span className="text-red-800">{hitungProgresSK()}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${hitungProgresSK()}%` }}></div></div>
+
+                      {/* Progres 2: Surat Keterangan */}
+                      <div 
+                        onClick={() => { setActiveTab('profil'); setSubTabRef('sk'); }}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">📜 Referensi Surat Keterangan</span>
+                          <span className="text-red-800 font-mono">{hitungProgresSK()}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${hitungProgresSK()}%` }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Logo Pemda Kabupaten</span><span className={sekolah.logoKabupaten ? "text-emerald-600" : "text-rose-600"}>{sekolah.logoKabupaten ? "TERSEDIA" : "BELUM ADA"}</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: sekolah.logoKabupaten ? '100%' : '0%' }}></div></div>
+
+                      {/* Progres 3: Logo Pemda */}
+                      <div 
+                        onClick={() => { setActiveTab('profil'); setSubTabRef('logo'); }}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">🖼️ Logo Atribut Daerah (KOP)</span>
+                          <span className={sekolah.logoKabupaten ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>{sekolah.logoKabupaten ? "TERSEDIA" : "BELUM ADA"}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: sekolah.logoKabupaten ? '100%' : '0%' }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border shadow-none space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Biodata Siswa</span><span className="text-red-800">{hitungProgresSiswa()}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${hitungProgresSiswa()}%` }}></div></div>
+
+                      {/* Progres 4: Biodata Siswa */}
+                      <div 
+                        onClick={() => setActiveTab('siswa')}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">👥 Biodata & Data Siswa</span>
+                          <span className="text-red-800 font-mono">{hitungProgresSiswa()}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${hitungProgresSiswa()}%` }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Nilai Akademik</span><span className="text-emerald-600">{Math.round((hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('asaj')) / 5)}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${Math.round((hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('asaj')) / 5)}%` }}></div></div>
+
+                      {/* Progres 5: Nilai Akademik */}
+                      <div 
+                        onClick={() => { setActiveTab('penilaian'); setIsPenilaianDropdownOpen(true); }}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">📊 Nilai Akademik Rapor & ASAJ</span>
+                          <span className="text-red-800 font-mono">{Math.round((hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('k6s2') + hitungProgresNilaiKomponen('asaj')) / 5)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${Math.round((hitungProgresNilaiKomponen('k5s1') + hitungProgresNilaiKomponen('k5s2') + hitungProgresNilaiKomponen('k6s1') + hitungProgresNilaiKomponen('k6s2') + hitungProgresNilaiKomponen('asaj')) / 5)}%` }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Kehadiran K5-K6</span><span className="text-red-800">{hitungProgresKehadiran()}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${hitungProgresKehadiran()}%` }}></div></div>
+
+                      {/* Progres 6: Kehadiran Siswa */}
+                      <div 
+                        onClick={() => { setActiveTab('penilaian'); setActivePenilaianSub('kehadiran'); setIsPenilaianDropdownOpen(true); }}
+                        className="p-4 bg-gray-50 rounded-xl border hover:border-red-300 hover:bg-red-50/20 cursor-pointer transition-all space-y-2 group"
+                      >
+                        <div className="flex justify-between text-xs font-bold items-center">
+                          <span className="text-gray-700 group-hover:text-red-900 transition-colors">📅 Kehadiran Siswa Kelas VI</span>
+                          <span className="text-red-800 font-mono">{hitungProgresKehadiran()}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${hitungProgresKehadiran()}%` }}></div>
+                        </div>
                       </div>
-                      <div className="p-4 bg-gray-50 rounded-xl border space-y-1">
-                        <div className="flex justify-between text-xs font-bold"><span>Nomor Ijazah</span><span className="text-red-800">{hitungProgresNomorIjazah()}%</span></div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full" style={{ width: `${hitungProgresNomorIjazah()}%` }}></div></div>
-                      </div>
+
                     </div>
                   </div>
                 </div>
@@ -1321,7 +1690,7 @@
                         </div>
                         <div className="p-6 bg-gray-50 rounded-2xl border flex flex-col items-center space-y-4">
                           <h5 className="text-sm font-bold uppercase">Logo Sekolah</h5>
-                          <div className="w-32 h-32 bg-white rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative group">
+                          <div className="w-32 h-32 bg-white rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden relative group font-sans">
                             {sekolah.logoSekolah ? (
                               <React.Fragment>
                                 <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="w-full h-full object-contain p-2" />
@@ -1346,12 +1715,12 @@
                     <div className="px-5 py-4 bg-gray-50 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div><h3 className="font-bold text-gray-800">Daftar Detail Siswa</h3></div>
                       <div className="flex flex-wrap gap-2">
-                        {/* FIX BUG: Memastikan pemanggilan handleDownloadTemplateSiswaExcel murni tanpa ReferenceError */}
+                        {/* KEMBALIKAN FITUR FOTO SISWA: Memperbaiki handleDownloadTemplateSiswaExcel */}
                         <button type="button" onClick={handleDownloadTemplateSiswaExcel} className="px-3 py-2 bg-white border rounded-lg text-xs font-bold">📥 Unduh Template (Excel)</button>
                         <label className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer">📤 Impor Excel<input type="file" accept=".xlsx, .xls" onChange={handleImportSiswaExcel} className="hidden" /></label>
                         
-                        {/* MASS PHOTO UPLOAD BUTTON */}
-                        <label htmlFor="upload-foto-massal" className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer">📸 Unggah Foto Massal</label>
+                        {/* MASS PHOTO UPLOAD */}
+                        <label htmlFor="upload-foto-massal" className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer">📸  Unggah Foto Massal</label>
                         <input id="upload-foto-massal" type="file" accept="image/*" multiple className="hidden" onChange={handleMassFotoUploadLocal} />
 
                         <button type="button" onClick={() => { setEditingSiswa(null); setShowSiswaModal(true); }} className="px-3.5 py-2 bg-red-800 text-white rounded-lg text-xs font-bold">+ Tambah Siswa</button>
@@ -1379,7 +1748,7 @@
                               <td className="px-4 py-4">{index + 1}</td>
                               <td className="px-4 py-4">
                                 {s.foto ? (
-                                  <img src={s.foto} className="w-10 h-12 object-cover rounded border border-gray-300" />
+                                  <img src={s.foto} className="w-10 h-12 object-cover rounded border border-gray-300" alt="Foto" />
                                 ) : (
                                   <div className="w-10 h-12 bg-gray-200 rounded flex items-center justify-center text-[9px] text-gray-400">No Foto</div>
                                 )}
@@ -1419,7 +1788,7 @@
                           <div className="flex items-center space-x-4 pb-4 border-b">
                             <div className="w-16 h-20 bg-gray-100 rounded-lg border border-dashed flex items-center justify-center overflow-hidden shrink-0">
                               {siswaForm.foto ? (
-                                <img src={siswaForm.foto} className="w-full h-full object-cover" />
+                                <img src={siswaForm.foto} className="w-full h-full object-cover" alt="Pratinjau" />
                               ) : (
                                 <span className="text-[10px] text-gray-400 text-center px-1">Foto 3x4</span>
                               )}
@@ -1535,6 +1904,7 @@
                               <td className="px-6 py-4">{m.nama}</td>
                               <td className="px-6 py-4 text-center">
                                 <div className="inline-flex space-x-2">
+                                  {/* FIX BUG: Menyelarasan kembali pemanggilan fungsi openEditMapel */}
                                   <button type="button" onClick={() => openEditMapel(m)} className="text-blue-600 font-bold hover:underline">Edit</button>
                                   <button type="button" onClick={() => handleDeleteMapel(m.id)} className="text-red-600 font-bold hover:underline">Hapus</button>
                                 </div>
@@ -1805,7 +2175,7 @@
                         </thead>
                         <tbody>
                           {siswa.map((s, idx) => {
-                            const totalIjazahNilai = mapel.reduce((sum, m) => sum + hitungNilaiAkhirIjazah(s.id, m.id), 0);
+                            const totalIjazahNilai = mapel.reduce((sum, m) => sum + hitungNilAIASAJMapel(s.id, m.id), 0); // fallback/alias murni
                             const rerataAkhir = hitungRataRataIjazahSiswa(s.id);
                             const isLulus = cekKelulusanSiswa(s.id);
                             const isRankSpecial = ijazahRanks[s.id] <= 5;
@@ -1947,7 +2317,8 @@
                               {siswa.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
                             </select>
                           )}
-                          <button onClick={handlePrint} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg">🖨️ Cetak SKL</button>
+                          <button onClick={handlePrint} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1">🖨️ Cetak SKL</button>
+                          <button onClick={() => handleDownloadPDF(isSklMassPrint ? "SKL_Massal" : `SKL_${siswa.find(s => s.id === selectedSklSiswaId)?.nama || 'Siswa'}`)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg flex items-center gap-1">📥 Unduh PDF</button>
                         </div>
                       </div>
 
@@ -1976,7 +2347,10 @@
                             <p className="text-xs text-gray-500 mt-0.5">Surat Keputusan resmi untuk penetapan kelulusan massal seluruh siswa kelas VI.</p>
                           </div>
                         </div>
-                        <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700">🖨️ Cetak SK Kelulusan</button>
+                        <div className="flex space-x-2">
+                          <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 flex items-center gap-1">🖨️ Cetak SK Kelulusan</button>
+                          <button onClick={() => handleDownloadPDF("SK_Kelulusan")} className="px-5 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 flex items-center gap-1">📥 Unduh PDF</button>
+                        </div>
                       </div>
 
                       {/* AREA CETAK SK KELULUSAN (A4 PRESISI) */}
@@ -1993,7 +2367,7 @@
                             <p className="text-[9px] italic my-0">{sekolah.alamat || '................'}, Kec. {sekolah.kecamatan || '................'}</p>
                           </div>
                           <div className="w-20 h-20 flex items-center justify-center shrink-0">
-                            {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full max-h-full object-contain" /> : <span className="text-4xl"></span>}
+                            {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full h-full object-contain" /> : <span className="text-4xl"></span>}
                           </div>
                         </div>
 
@@ -2047,7 +2421,7 @@
                             <p className="font-bold pt-2">Kepala {sekolah.nama},</p>
                             <div className="h-16"></div>
                             <p className="font-bold underline uppercase">{sekolah.kepalaSekolah}</p>
-                            <p className="text-gray-600 font-mono text-xs">NIP. {sekolah.nip}</p>
+                            <p className="text-gray-600 font-mono text-xs flex items-center justify-start gap-1 font-semibold">NIP. {sekolah.nip}</p>
                           </div>
                         </div>
 
@@ -2094,7 +2468,7 @@
                                   <td className="font-mono border border-black">{rRapor.toFixed(1).replace('.', ',')}</td>
                                   <td className="font-mono border border-black">{rAsaj.toFixed(1).replace('.', ',')}</td>
                                   <td className="font-mono border border-black font-bold">{rAkhir.toFixed(2).replace('.', ',')}</td>
-                                  <td className="border-black border font-bold text-[9pt]">{isLulus ? "LULUS" : "TIDAK LULUS"}</td>
+                                  <td className="border border-black font-bold text-[9pt]">{isLulus ? "LULUS" : "TIDAK LULUS"}</td>
                                 </tr>
                               );
                             })}
@@ -2107,7 +2481,7 @@
                             <p className="font-bold">Kepala {sekolah.nama},</p>
                             <div className="h-16"></div>
                             <p className="font-bold underline uppercase">{sekolah.kepalaSekolah}</p>
-                            <p className="text-gray-600 font-mono text-xs">NIP. {sekolah.nip}</p>
+                            <p className="text-gray-600 font-mono text-xs flex items-center justify-start gap-1 font-semibold">NIP. {sekolah.nip}</p>
                           </div>
                         </div>
 
@@ -2118,7 +2492,7 @@
                   {/* 3. BERITA ACARA PLENO KELULUSAN */}
                   {activeAdministrasiSub === 'berita_acara' && (
                     <div className="space-y-4 animate-fadeIn">
-                      <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print print:hidden">
+                      <div className="bg-white p-5 rounded-2xl border shadow-none flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print print:hidden">
                         <div className="flex items-center space-x-3">
                           <span className="text-lg">📝</span>
                           <div>
@@ -2126,10 +2500,13 @@
                             <p className="text-xs text-gray-500 mt-0.5">Dokumen berita acara administrasi sekolah untuk kelengkapan arsip kelulusan.</p>
                           </div>
                         </div>
-                        <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg">🖨️ Cetak Berita Acara</button>
+                        <div className="flex space-x-2">
+                          <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1">🖨️ Cetak Berita Acara</button>
+                          <button onClick={() => handleDownloadPDF("Berita_Acara_Pleno")} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg flex items-center gap-1">📥 Unduh PDF</button>
+                        </div>
                       </div>
 
-                      <div className="bg-white border p-12 max-w-[210mm] mx-auto shadow-md serif-font text-xs" id="print-area">
+                      <div className="bg-white border p-12 max-w-[210mm] mx-auto shadow-none serif-font text-xs" id="print-area">
                         {/* KOP Dinas Pendidikan */}
                         <div className="flex items-center justify-between border-b-4 border-double border-black pb-4 mb-6">
                           <div className="w-20 h-20 flex items-center justify-center shrink-0">
@@ -2142,7 +2519,7 @@
                             <p className="text-[10px] font-medium italic my-0">{sekolah.alamat || '................'}, Kec. {sekolah.kecamatan || '................'}, Kab. {sekolah.kabupaten || '................'}</p>
                           </div>
                           <div className="w-20 h-20 flex items-center justify-center shrink-0">
-                            {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full max-h-full object-contain" /> : <span className="text-4xl"></span>}
+                            {sekolah.logoSekolah ? <img src={sekolah.logoSekolah} alt="Logo Sekolah" className="max-w-full h-full object-contain" /> : <span className="text-4xl"></span>}
                           </div>
                         </div>
 
@@ -2156,7 +2533,7 @@
                         </p>
 
                         <p className="mt-4 leading-relaxed">
-                          Rapat dihadiri oleh Kepala Sekolah selaku penanggung jawab, Dewan Guru, Komite Sekolah, and Staf Tata Usaha Satuan Pendidikan (Daftar hadir terlampir). After meninjau hasil belajar, kriteria kehadiran, and seluruh hasil evaluasi Asesmen Sumatif Akhian Jenjang (ASAJ), maka diputuskan:
+                          Rapat dihadiri oleh Kepala Sekolah selaku penanggung jawab, Dewan Guru, Komite Sekolah, and Staf Tata Usaha Satuan Pendidikan (Daftar hadir terlampir). After meninjau hasil belajar, kriteria kehadiran, and seluruh hasil evaluasi Asesmen Sumatif Akhir Jenjang (ASAJ), maka diputuskan:
                         </p>
 
                         <table className="w-full mt-4 ml-6 table-fixed">
@@ -2182,10 +2559,10 @@
                           </div>
                           <div className="w-64 space-y-1 text-right">
                             <p className="font-mono text-right">{sekolah.titimangsaTranskrip}</p>
-                            <p className="font-bold text-center select-none">Kepala Sekolah,</p>
+                            <p className="font-bold text-center font-sans font-semibold">Kepala Sekolah,</p>
                             <div className="h-16"></div>
                             <p className="font-bold underline uppercase text-center">{sekolah.kepalaSekolah}</p>
-                            <p className="text-gray-600 font-mono text-[10px] text-center font-sans font-semibold">NIP. {sekolah.nip}</p>
+                            <p className="text-gray-600 font-mono text-[10px] text-center font-sans font-semibold flex items-center justify-center gap-1">NIP. {sekolah.nip}</p>
                           </div>
                         </div>
                       </div>
@@ -2193,7 +2570,7 @@
                   )}
 
                   {/* 4. CETAK AMPLOP SURAT KELULUSAN */}
-                  {activeAdministrasiSub === 'amplop' && (
+                  {activeTab === 'administrasi' && activeAdministrasiSub === 'amplop' && (
                     <div className="space-y-4 animate-fadeIn">
                       <div className="bg-white p-5 rounded-2xl border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print print:hidden">
                         <div className="flex items-center space-x-3">
@@ -2211,7 +2588,8 @@
                           >
                             {siswa.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
                           </select>
-                          <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg animate-pulse">🖨️ Cetak Amplop</button>
+                          <button onClick={handlePrint} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg animate-pulse flex items-center gap-1">🖨️ Cetak Amplop</button>
+                          <button onClick={() => handleDownloadPDF(`Amplop_${siswa.find(s => s.id === selectedSklSiswaId)?.nama || 'Siswa'}`)} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg flex items-center gap-1">📥 Unduh PDF</button>
                         </div>
                       </div>
 
@@ -2290,7 +2668,6 @@
                           return (
                             <tr key={s.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4">{index + 1}</td>
-                              <td className="px-6 py-4 font-bold">{s.nama}</td>
                               <td className="px-6 py-4 font-mono font-semibold text-red-900 text-xs">{nomorIjazah[s.id] || <span className="text-gray-400 italic font-normal">Belum diisi</span>}</td>
                               <td className="px-6 py-4 font-mono">{rRapor.toFixed(2)}</td>
                               <td className="px-6 py-4 text-center font-mono">{rAsaj.toFixed(2)}</td>
@@ -2318,7 +2695,10 @@
                       <button type="button" onClick={() => setIsMassPrint(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${!isMassPrint ? 'bg-red-800 text-white' : 'bg-gray-100 text-gray-700'}`}>Cetak Individu</button>
                       <button type="button" onClick={() => setIsMassPrint(true)} className={`px-4 py-2 rounded-lg text-xs font-bold ${isMassPrint ? 'bg-red-800 text-white' : 'bg-gray-100 text-gray-700'}`}>Cetak Massal (Semua Siswa)</button>
                     </div>
-                    <button type="button" onClick={handlePrint} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700">🖨️ Cetak Sekarang</button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handlePrint} className="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-lg hover:bg-emerald-700 flex items-center gap-1">🖨️ Cetak Sekarang</button>
+                      <button type="button" onClick={() => handleDownloadPDF(isMassPrint ? "Transkrip_Massal" : `Transkrip_${selectedPrintSiswa.nama}`)} className="px-5 py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 flex items-center gap-1">📥 Unduh PDF</button>
+                    </div>
                   </div>
 
                   {/* Rendering Massal vs Individu murni tanpa redudansi */}
@@ -2361,7 +2741,7 @@
               {/* DIALOG RESETING KONFIRMASI */}
               {showResetConfirm && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6 text-center space-y-4">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-sm overflow-hidden p-6 text-center space-y-4">
                     <div className="w-16 h-16 bg-red-100 text-red-800 rounded-full flex items-center justify-center text-3xl mx-auto">⚠️</div>
                     <div className="space-y-1">
                       <h3 className="font-bold text-gray-900 text-lg">Hapus Semua Data?</h3>
